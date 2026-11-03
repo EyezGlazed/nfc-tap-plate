@@ -3,7 +3,7 @@ import opentype from 'opentype.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { svgToCrossSection } from './svg2d.js';
-import { layoutFront, buildCover, DEFAULT_SETTINGS } from './build.js';
+import { layoutFront, buildCover, motifLayers, DEFAULT_SETTINGS } from './build.js';
 import { parseBinarySTL, fromManifold, printPlate, write3MF, transform } from './export3mf.js';
 import { toManifold, buildFrame, buildBase, magnetPositions, STICKER_PRESETS } from './frame.js';
 import { outlineColor } from './contrast.js';
@@ -25,13 +25,14 @@ const setStatus = (t, err = false) => { statusEl.textContent = t; statusEl.class
 
 // ---------------- state
 const clone = (o) => JSON.parse(JSON.stringify(o));
+let current = null; // last build: { cover, motifs, lay }
 let state = {
   settings: clone(DEFAULT_SETTINGS),
   logoSvg: null, logoName: null, // null = default N-mark
   iconSvg: null, iconName: null, // null = default signal arcs
   fontId: 'open-sans-700', customFont: null, customFontName: null, // customFont: base64
-  view: { frame: '#adadad', plate: '#26262a', motif: '#d6402f', showTag: true, showFrame: true },
-  out: { baseFil: 1, motifFil: 2, extras: true, bed: 256, frame: true, base: true, cover: true },
+  view: { showTag: true, showFrame: true },
+  out: { extras: true, bed: 256, frame: true, base: true, cover: true },
 };
 try {
   const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
@@ -59,6 +60,7 @@ for (const [k, v] of new URLSearchParams(location.hash.slice(1))) {
 const num = (key, label, unit = 'mm', step = 0.1, min, max) => ({ t: 'num', key, label, unit, step, min, max });
 const chk = (key, label) => ({ t: 'chk', key, label });
 const sel = (key, label, options) => ({ t: 'sel', key, label, options });
+const col = (k, label = 'Colour') => ({ t: 'color', key: `settings.colors.${k}`, label });
 const ALIGN = [['center', 'Centred in the space'], ['logo', 'Close to the logo'], ['edge', 'Close to the edge']];
 const textFields = (z) => [
   { t: 'lines', key: `settings.${z}.lines`, label: 'One row per line, up to 3. Leave empty for none.' },
@@ -66,6 +68,7 @@ const textFields = (z) => [
   { t: 'pct', key: `settings.${z}.lineGap`, label: 'Space between rows', unit: '%', step: 5, min: 0, max: 200 },
   sel(`settings.${z}.align`, 'Placement', ALIGN),
   num(`settings.${z}.gap`, 'Distance (for “close to”)', 'mm', 0.5, 0, 30),
+  col(z),
 ];
 const isRound = () => state.settings.sticker.shape === 'round';
 const indentOn = () => state.settings.switch.indent !== 'none';
@@ -76,6 +79,7 @@ const SCHEMA = [
     sel('settings.switch.indent', 'Step near the wall', [['inside', 'Narrower: frame hooks in'], ['outside', 'Wider rim: frame clears it'], ['none', 'None: straight sides']]),
     { ...num('settings.switch.iw', 'Step width (per side)', 'mm', 0.1, 0.2, 5), show: indentOn },
     { ...num('settings.switch.ih', 'Step height from the wall', 'mm', 0.1, 0.5, 8.5), show: indentOn },
+    col('frame', 'Frame colour'),
   ] },
   { title: 'NFC sticker', hint: 'The plate stays the same size (it fits a phone); only the pocket under the cover changes.', fields: [
     { t: 'preset' },
@@ -85,12 +89,14 @@ const SCHEMA = [
     { ...num('settings.sticker.d', 'Diameter', 'mm', 0.5, 5, 66), show: isRound },
     num('settings.sticker.t', 'Thickness', 'mm', 0.1, 0.1, 4),
     num('settings.sticker.clear', 'Fit clearance (total)', 'mm', 0.05, 0, 2),
+    col('plate', 'Plate colour'),
   ] },
-  { title: 'Logo', open: true, hint: 'Sits over the NFC tag. Any SVG: dark shapes print in the motif colour, white shapes cut holes.', fields: [
+  { title: 'Logo', open: true, hint: 'Sits over the NFC tag. Any SVG: dark shapes print in the colour below, white shapes cut holes.', fields: [
     { t: 'file', which: 'logo', label: 'Logo SVG' },
     num('settings.logo.height', 'Height', 'mm', 0.5, 2, 90),
     num('settings.logo.x', 'Move right', 'mm', 0.5, -30, 30),
     num('settings.logo.y', 'Move up', 'mm', 0.5, -40, 40),
+    col('logo'),
   ] },
   { title: 'Frame around the logo', hint: 'Marks where to hold the phone. By default it follows the sticker.', fields: [
     chk('settings.frame.on', 'Show frame'),
@@ -100,12 +106,14 @@ const SCHEMA = [
     { ...num('settings.frame.h', 'Inside height', 'mm', 0.5, 5, 100), show: () => !state.settings.frame.match },
     { ...num('settings.frame.r', 'Corner radius', 'mm', 0.5, 0, 30), show: () => !(state.settings.frame.match && isRound()) },
     num('settings.frame.line', 'Line width', 'mm', 0.2, 0.4, 8),
+    col('ring'),
   ] },
   { title: 'Icon above', hint: 'Centred above the frame (or the logo when the frame is off).', fields: [
     chk('settings.icon.on', 'Show icon'),
     { t: 'file', which: 'icon', label: 'Icon SVG' },
     num('settings.icon.height', 'Height', 'mm', 0.5, 2, 60),
     num('settings.icon.gap', 'Gap to frame', 'mm', 0.2, 0, 30),
+    col('icon'),
   ] },
   { title: 'Position', hint: 'Logo, frame and icon move together. 0 puts the logo over the middle of the tag.', fields: [
     num('settings.groupY', 'Move group up', 'mm', 0.5, -50, 50),
@@ -115,17 +123,15 @@ const SCHEMA = [
   { title: 'Text above', fields: textFields('textAbove') },
   { title: 'Font', fields: [{ t: 'font' }] },
   { title: 'Preview', fields: [
-    { t: 'colors' },
     chk('view.showTag', 'Show NFC tag outline'),
     chk('view.showFrame', 'Show light switch frame and base'),
   ] },
   { title: 'Export', hint: 'One 3MF with the parts laid out for printing: frame (print-in-place), plate base back down, cover face down.', fields: [
     chk('out.frame', 'Include frame'), chk('out.base', 'Include plate base'), chk('out.cover', 'Include cover + motif'),
-    num('out.baseFil', 'Filament for plate', '#', 1, 1, 16),
-    num('out.motifFil', 'Filament for motif', '#', 1, 1, 16),
+    { t: 'filaments' },
     num('out.bed', 'Bed size', 'mm', 1, 120, 500),
     chk('out.extras', 'Bambu / Orca / Creality extras'),
-    { t: 'note', text: 'Extras pre-assign the filaments above and add a 0–0.4 mm height range with 0 walls on the cover, so both colours print in the same line direction. Turn off for PrusaSlicer, Cura and others.' },
+    { t: 'note', text: 'Extras pre-assign the filaments above (one per colour, in that order) and add a 0–0.4 mm height range with 0 walls on the cover, so all colours print in the same line direction. Turn off for PrusaSlicer, Cura and others.' },
   ] },
 ];
 
@@ -238,12 +244,18 @@ function field(f) {
       state.customFont = b64(buf); state.customFontName = file.name; state.fontId = 'custom';
       input.value = ''; font = null; refresh(); changed('font');
     });
-  } else if (f.t === 'colors') {
-    wrap.className = 'colors';
-    wrap.innerHTML = ['frame', 'plate', 'motif'].map((k) => `<label><input type="color" data-k="${k}" value="${state.view[k]}"> ${k[0].toUpperCase() + k.slice(1)}</label>`).join('');
-    for (const inp of wrap.querySelectorAll('input')) {
-      inp.addEventListener('input', () => { state.view[inp.dataset.k] = inp.value; persist(); paintColors(); });
-    }
+  } else if (f.t === 'color') {
+    wrap.className = 'row';
+    wrap.innerHTML = `<label for="${id}">${f.label}</label><input id="${id}" type="color" class="swatch" value="${getPath(state, f.key)}">`;
+    wrap.querySelector('input').addEventListener('input', (e) => {
+      setPath(state, f.key, e.target.value);
+      paintColors();
+      changed(f.key); // the motif splits into one part per colour: rebuild (debounced)
+    });
+  } else if (f.t === 'filaments') {
+    wrap.className = 'filaments';
+    filamentsEl = wrap;
+    refreshFilaments();
   } else if (f.t === 'preset') {
     wrap.className = 'row wide';
     wrap.innerHTML = `<label for="${id}">Common sizes</label><select id="${id}" data-preset><option value="">Custom</option>${STICKER_PRESETS.map((p) => `<option value="${p.id}">${p.label}</option>`).join('')}</select>`;
@@ -289,24 +301,47 @@ wrapEl.addEventListener('pointerdown', (e) => {
 }, true);
 wrapEl.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // no auto-scroll
 let controls = makeControls();
+const C = () => state.settings.colors;
 const mats = {
-  plate: new THREE.MeshStandardMaterial({ color: state.view.plate, roughness: 0.75, metalness: 0, flatShading: true }),
-  motif: new THREE.MeshStandardMaterial({ color: state.view.motif, roughness: 0.6, metalness: 0, flatShading: true }),
-  frame: new THREE.MeshStandardMaterial({ color: state.view.frame, roughness: 0.8, metalness: 0, flatShading: true }),
+  plate: new THREE.MeshStandardMaterial({ color: C().plate, roughness: 0.75, metalness: 0, flatShading: true }),
+  frame: new THREE.MeshStandardMaterial({ color: C().frame, roughness: 0.8, metalness: 0, flatShading: true }),
   tag: new THREE.LineDashedMaterial({ color: 0x3fa7ff, dashSize: 1.6, gapSize: 1.2 }),
 };
 function paintColors() {
-  mats.plate.color.set(state.view.plate); mats.frame.color.set(state.view.frame); mats.motif.color.set(state.view.motif);
+  mats.plate.color.set(C().plate); mats.frame.color.set(C().frame);
   paintTag();
   render();
 }
 // tag outline: WCAG AAA against the plate (and the motif where possible), AA where AAA can't be had
 function paintTag() {
-  const oc = outlineColor(state.view.plate, state.view.motif);
+  const used = current ? current.motifs.map((m) => m.color) : [C().logo];
+  const oc = outlineColor(C().plate, used);
   mats.tag.color.set(oc.color);
   mats.tag.userData.contrast = oc;
 }
 paintTag();
+// motif materials, one per colour
+const colorMats = new Map();
+function colorMat(hex) {
+  if (!colorMats.has(hex)) colorMats.set(hex, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.6, metalness: 0, flatShading: true }));
+  return colorMats.get(hex);
+}
+// filament slots: one per distinct colour, in the order frame, plate, then the motif parts
+const NAMES = { frame: 'frame', plate: 'plate', logo: 'logo', ring: 'frame around the logo', icon: 'icon', textBelow: 'text below', textAbove: 'text above' };
+function filamentList() {
+  const list = new Map();
+  const add = (hex, what) => { hex = hex.toLowerCase(); if (!list.has(hex)) list.set(hex, []); list.get(hex).push(what); };
+  add(C().frame, NAMES.frame); add(C().plate, NAMES.plate);
+  for (const m of current ? current.motifs : []) for (const k of m.keys) add(m.color, NAMES[k]);
+  return list;
+}
+function filamentSlots() { return new Map([...filamentList().keys()].map((hex, i) => [hex, i + 1])); }
+let filamentsEl = null;
+function refreshFilaments() {
+  if (!filamentsEl) return;
+  filamentsEl.innerHTML = '<p class="hint">Filaments, one per colour:</p>' + [...filamentList()].map(([hex, what], i) =>
+    `<div class="fil"><span class="chip" style="background:${hex}"></span><b>${i + 1}</b> ${hex} · ${what.join(', ')}</div>`).join('');
+}
 const groupAssembled = new THREE.Group();
 const groupPrint = new THREE.Group();
 scene.add(groupAssembled, groupPrint);
@@ -406,7 +441,7 @@ function getShape(which) {
 }
 
 // ---------------- rebuild
-let timer = null, building = false, again = false, current = null;
+let timer = null, building = false, again = false;
 function changed(key) {
   if (/^settings\.sticker\.(shape|w|h|d|t)$/.test(key) && state.settings.sticker.preset) {
     const p = STICKER_PRESETS.find((x) => x.id === state.settings.sticker.preset);
@@ -466,8 +501,13 @@ async function rebuild() {
     notes.push(...frameRes.notes);
     const lay = layoutFront(wasm, model, S, { logo: lg.cs, icon }, f);
     warnings.push(...lay.warnings);
-    const { cover, motif } = buildCover(wasm, model, lay.motif2d, yShift, frameRes.plateNotch, frameRes.mags.pos);
-    current = { cover: fromManifold('Plate_Cover', cover), motif: motif ? fromManifold('Plate_Motif', motif) : null, lay };
+    const { cover, motifs } = buildCover(wasm, model, motifLayers(lay.parts, S.colors), yShift, frameRes.plateNotch, frameRes.mags.pos);
+    current = {
+      cover: fromManifold('Plate_Cover', cover), lay,
+      // one mesh per colour; .color and .keys travel with the mesh into the print plate / 3MF
+      motifs: motifs.map((m) => Object.assign(fromManifold(`Motif_${m.keys.join('_')}`, m.man), { color: m.color, keys: m.keys })),
+    };
+    paintTag(); refreshFilaments();
     // assembled view
     clearGroup(groupAssembled);
     for (const k of ['frame_a', 'frame_b', 'latch', 'plate_base']) {
@@ -479,7 +519,7 @@ async function rebuild() {
     coverOnly = new THREE.Group();
     const co = meshObj(current.cover, mats.plate);
     groupAssembled.add(co);
-    if (current.motif) groupAssembled.add(meshObj(current.motif, mats.motif));
+    for (const m of current.motifs) groupAssembled.add(meshObj(m, colorMat(m.color)));
     coverOnly.add(co.clone());
     tagLines = makeOutlines(yShift);
     tagLines.visible = state.view.showTag;
@@ -520,7 +560,7 @@ function showWarnings(list, notes = []) {
   }
 }
 function plate() {
-  return printPlate(model, fixed, current.cover, current.motif, {
+  return printPlate(model, fixed, current.cover, current.motifs, {
     bed: state.out.bed, include: { frame: state.out.frame, base: state.out.base, cover: state.out.cover }, pivot: frameRes.pivot,
   });
 }
@@ -535,8 +575,8 @@ function updatePrintPreview() {
   const grid = new THREE.GridHelper(bed, bed / 16, 0x777777, 0x888888);
   grid.rotation.x = Math.PI / 2; grid.position.set(bed / 2, bed / 2, 0);
   groupPrint.add(grid);
-  const matFor = (n) => (n === 'Plate_Motif' ? mats.motif : /^(frame|latch)/i.test(n) ? mats.frame : mats.plate);
-  for (const g of pl.groups) g.parts.forEach((m) => groupPrint.add(meshObj(m, matFor(m.name))));
+  const matFor = (m) => (m.color ? colorMat(m.color) : /^(frame|latch)/i.test(m.name) ? mats.frame : mats.plate);
+  for (const g of pl.groups) g.parts.forEach((m) => groupPrint.add(meshObj(m, matFor(m))));
   if (!pl.fits) showWarnings([`The parts need ${pl.footprint.map((x) => x.toFixed(0)).join(' × ')} mm and don't fit a ${bed} mm bed. Export fewer parts at once.`]);
 }
 
@@ -554,7 +594,7 @@ $('#btn-export').addEventListener('click', () => {
   if (!pl.groups.length) return setStatus('Nothing selected to export.', true);
   const data = write3MF(pl.groups, {
     slicerExtras: state.out.extras,
-    filament: { base: state.out.baseFil, motif: state.out.motifFil },
+    filament: (role, pi, mesh) => filamentSlots().get(role === 'frame' ? C().frame.toLowerCase() : (mesh.color || C().plate).toLowerCase()),
     firstLayers: { top: model.plate.motif_d, layer: 0.2 },
   });
   download(data, 'nfc-tap-plate.3mf', 'model/3mf');

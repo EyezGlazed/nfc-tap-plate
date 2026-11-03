@@ -118,3 +118,29 @@ test('text above the logo centres between the logo group and the top edge', () =
   near(lay.flat.halfH - b.max[1], b.min[1] - lay.group.y1, 1.2, 'centred above');
   assert.deepEqual(lay.warnings, []);
 });
+
+test('colours: one motif part per colour, no overlaps, filaments numbered per colour in the 3MF', async () => {
+  const { motifLayers } = await import('../src/build.js');
+  const fixed = {};
+  for (const [k, v] of Object.entries(model.parts)) fixed[k] = parseBinarySTL(k, rd(v.file));
+  const shapes = { logo: svg('assets/logos/n-mark.svg').cs, icon: svg('assets/logos/signal-arcs.svg').cs };
+  const lay = layoutFront(wasm, model, DEFAULT_SETTINGS, shapes, font);
+  // defaults: everything black -> one part, same as the single motif
+  const one = motifLayers(lay.parts, DEFAULT_SETTINGS.colors);
+  assert.equal(one.length, 1);
+  near(one[0].cs.area(), lay.motif2d.area(), 0.05, 'all-black layer = whole motif');
+  // three colours
+  const colors = { ...DEFAULT_SETTINGS.colors, logo: '#ff0000', textBelow: '#0000ff' };
+  const layers = motifLayers(lay.parts, colors);
+  assert.deepEqual(layers.map((l) => l.color).sort(), ['#000000', '#0000ff', '#ff0000']);
+  const { cover, motifs, motif } = buildCover(wasm, model, layers);
+  near(motifs.reduce((s, m) => s + m.man.volume(), 0), motif.volume(), 0.01, 'colour parts do not overlap');
+  near(cover.intersect(motif).volume(), 0, 1e-3, 'cover clear of the motif');
+  const meshes = motifs.map((m) => Object.assign(fromManifold('Motif', m.man), { color: m.color }));
+  const plate = printPlate(model, fixed, fromManifold('Plate_Cover', cover), meshes, { bed: 256 });
+  const slot = { '#adadad': 1, '#ff0000': 2, '#000000': 3, '#0000ff': 4 };
+  const zip = unzipSync(write3MF(plate.groups, { filament: (role, pi, m) => (m.color ? slot[m.color] : 1) }));
+  const ms = strFromU8(zip['Metadata/model_settings.config']);
+  const ext = [...ms.matchAll(/<metadata key="extruder" value="(\d+)"\/>\s*<\/part>/g)].map((x) => +x[1]);
+  assert.deepEqual([...new Set(ext)].sort(), [1, 2, 3, 4], `extruders ${ext}`);
+});

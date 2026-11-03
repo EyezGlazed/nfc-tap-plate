@@ -95,7 +95,8 @@ export function printPlate(model, fixed, cover, motif, { gap = 6, bed = 256, inc
   const [qx, qy] = pivot;
   const groups = [];
   if (include.frame) groups.push({ role: 'frame', name: 'Frame (print-in-place)', parts: [fixed.frame_a, fixed.frame_b, transform(fixed.latch, rotZ(model.latch.print_angle, qx, qy))] });
-  if (include.cover) groups.push({ role: 'cover', name: 'Cover + motif (face down)', parts: [cover, motif].filter(Boolean).map((m) => transform(m, compose(rotZ(90), FLIP_X))) });
+  const motifs = Array.isArray(motif) ? motif : [motif]; // one mesh per colour
+  if (include.cover) groups.push({ role: 'cover', name: 'Cover + motif (face down)', parts: [cover, ...motifs].filter(Boolean).map((m) => transform(m, compose(rotZ(90), FLIP_X))) });
   if (include.base) groups.push({ role: 'base', name: 'Plate base (back down)', parts: [transform(fixed.plate_base, rotZ(90))] });
   for (const g of groups) {
     const b = bbox(g.parts);
@@ -144,14 +145,16 @@ const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"';
 /**
  * @param groups   from printPlate(): each group becomes one object with one part per mesh
  * @param opts.slicerExtras  write Bambu/Orca/Creality metadata (filament per part, height range)
- * @param opts.filament      { base: 1, motif: 2 } 1-based filament numbers
+ * @param opts.filament      { base: 1, motif: 2 } 1-based filament numbers, or a function
+ *                           (role, partIndex, mesh) => number
  * @param opts.firstLayers   { top: 0.4, wallLoops: 0 } height-range modifier on the cover object
  */
 export function write3MF(groups, { slicerExtras = true, filament = { base: 1, motif: 2 }, firstLayers = { top: 0.4 }, title = 'NFC Tap Plate' } = {}) {
   const files = { '[Content_Types].xml': strToU8(CT), '_rels/.rels': strToU8(RELS) };
   let id = 1;
   const objs = groups.map((g, gi) => {
-    const parts = g.parts.map((m, pi) => ({ id: id++, mesh: m, uuid: uuid(gi + 1, pi), motif: g.role === 'cover' && pi === 1 }));
+    const filOf = typeof filament === 'function' ? filament : (role, pi) => (role === 'cover' && pi >= 1 ? filament.motif : filament.base);
+    const parts = g.parts.map((m, pi) => ({ id: id++, mesh: m, uuid: uuid(gi + 1, pi), fil: filOf(g.role, pi, m) }));
     return { ...g, id: id++, uuid: uuid(0x100 + gi + 1, 0), parts };
   });
   if (!slicerExtras) {
@@ -186,9 +189,9 @@ export function write3MF(groups, { slicerExtras = true, filament = { base: 1, mo
     `<build p:UUID="${uuid(0x300, 0)}">` + objs.map((o) => `<item objectid="${o.id}" p:UUID="${uuid(0x400 + o.id, 0)}" transform="1 0 0 0 1 0 0 0 1 0 0 0" printable="1"/>`).join('') + '</build></model>');
   const I4 = '1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1';
   files['Metadata/model_settings.config'] = strToU8('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n' + objs.map((o) =>
-    `  <object id="${o.id}">\n    <metadata key="name" value="${esc(o.name)}"/>\n    <metadata key="extruder" value="${filament.base}"/>\n` +
+    `  <object id="${o.id}">\n    <metadata key="name" value="${esc(o.name)}"/>\n    <metadata key="extruder" value="${o.parts[0].fil}"/>\n` +
     o.parts.map((p) => `    <part id="${p.id}" subtype="normal_part">\n      <metadata key="name" value="${esc(p.mesh.name)}"/>\n      <metadata key="matrix" value="${I4}"/>\n` +
-      `      <metadata key="extruder" value="${p.motif ? filament.motif : filament.base}"/>\n    </part>\n`).join('') +
+      `      <metadata key="extruder" value="${p.fil}"/>\n    </part>\n`).join('') +
     '  </object>\n').join('') + '</config>\n');
   const cover = objs.find((o) => o.role === 'cover');
   if (cover && firstLayers) {

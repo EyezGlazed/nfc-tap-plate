@@ -55,8 +55,13 @@ the Fusion STEP) and local paths out of it.
 - `src/contrast.js`: WCAG contrast. The preview's dashed tag outline picks its colour
   against the plate colour (AAA 7:1 first, the motif colour as a second priority) and drops
   to AA 4.5:1 only where AAA is impossible (mid greys). User request.
-- Preview colours: `view.frame` (#adadad, frame + latch), `view.plate` (base + cover),
-  `view.motif`.
+- Colours are print settings (`settings.colors`: frame, plate, logo, ring, icon, textBelow,
+  textAbove; user defaults: #adadad frame + plate, black motif). Each colour picker sits in
+  its own section. `motifLayers` splits the motif into one CrossSection per distinct colour
+  (earlier parts win overlaps); `buildCover` returns `motifs` (one solid each) and the 3MF
+  gets one part per colour. Filament slots: one per distinct colour, in the order frame,
+  plate, motif parts (listed in the Export section); `write3MF` takes `filament` as a
+  function (role, partIndex, mesh) => slot.
 - `src/text2d.js`: opentype.js text. Size = cap height (same as FreeCAD ShapeString with
   ScaleToSize).
 - `src/export3mf.js`: STL parsing, the print-plate layout (port of

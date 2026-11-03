@@ -17,7 +17,7 @@ function hsl(h, s, l) {
 
 /**
  * Outline colour that reads against the plate colour (where the line mostly runs) and the
- * motif colour (where it crosses the logo). Goes for WCAG AAA (7:1) and drops to AA (4.5:1)
+ * motif colours (where it crosses the logo; the lowest ratio of them counts). Goes for WCAG AAA (7:1) and drops to AA (4.5:1)
  * only where AAA can't be reached (mid tones: even black or white give about 4.6:1 there).
  * Tiers, best first: AAA on both, AAA on plate + AA on motif, AAA on plate, AA on both,
  * AA on plate, else the most contrast on the plate. Within a tier it keeps the blue hue and
@@ -25,10 +25,11 @@ function hsl(h, s, l) {
  * @returns { color, plate, motif } with the two contrast ratios
  */
 export function outlineColor(plate, motif, hue = 210, baseL = 0.62) {
+  const motifs = (Array.isArray(motif) ? motif : [motif]).filter(Boolean);
   const cands = [];
   for (let i = 0; i <= 100; i++) {
     const c = hsl(hue, 1, i / 100);
-    cands.push({ color: c, l: i / 100, plate: contrast(c, plate), motif: contrast(c, motif) });
+    cands.push({ color: c, l: i / 100, plate: contrast(c, plate), motif: motifs.length ? Math.min(...motifs.map((m) => contrast(c, m))) : 21 });
   }
   const tiers = [[7, 7], [7, 4.5], [7, 0], [4.5, 4.5], [4.5, 0]];
   for (const [p, m] of tiers) {

@@ -10,7 +10,7 @@ parts laid out on the bed. Everything runs in the browser; nothing is uploaded.
 | --- | --- | --- |
 | Frame (two halves + latch) | Wall side down, print-in-place hinges | Clamps around an 83 × 82.2 mm switch cover |
 | Plate base | Back down | Holds the NFC sticker (44 × 28 mm) in a pocket; slides onto the frame with dovetails |
-| Cover + motif | Face down, two colours | Your design, inlaid 0.4 mm (2 layers) into the front |
+| Cover + motif | Face down, one colour per element | Your design, inlaid 0.4 mm (2 layers) into the front |
 
 The cover is held by four 6 × 2 mm disc magnets (Ø 6.2 × 2.2 mm press-fit pockets). Pair
 the polarity before pressing them in: stick each base magnet to a cover magnet first.
@@ -27,7 +27,10 @@ the polarity before pressing them in: stick each base magnet to a cover magnet f
   shaped for a phone; only the pocket under the cover changes. The frame ring around the
   logo follows the sticker by default.
 
-- **Logo**: any SVG. Dark shapes print in the motif colour, white shapes cut holes,
+- **Colours**: the frame, plate, logo, frame around the logo, icon and each text block have
+  their own colour (default: grey #adadad frame and plate, black motif). Every distinct
+  colour becomes one filament.
+- **Logo**: any SVG. Dark shapes print in the logo colour, white shapes cut holes,
   strokes are thickened automatically (line icons work as they are). `<text>` in an SVG
   is ignored; convert it to paths first.
 - **Frame and icon**: an optional rounded frame around the logo (default: the size of the
@@ -36,8 +39,9 @@ the polarity before pressing them in: stick each base magnet to a cover magnet f
   mm. Rows are centred in the free space between the logo group and the plate edge, or
   placed close to the logo or the edge.
 - **Export**: one 3MF. With "Bambu / Orca / Creality extras" on, the file also assigns the
-  plate and motif filaments and adds a 0–0.4 mm height range with 0 wall loops on the
-  cover, so both colours in the first layers print in the same line direction.
+  filaments (one per colour, numbered as listed in the Export section) and adds a 0–0.4 mm
+  height range with 0 wall loops on the cover, so all colours in the first layers print in
+  the same line direction.
 - **Links**: any setting can go in the address, e.g.
   `#settings.sticker.shape=round&settings.sticker.d=30&view=3d`.
 - **Save design** writes a small JSON file (including your SVGs) that **Open design**

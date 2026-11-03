@@ -89,9 +89,10 @@ textarea {
 .check input { width: 16px; height: 16px; accent-color: var(--accent); }
 .file { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .file .name { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.colors { display: flex; gap: 12px; flex-wrap: wrap; }
-.colors label { display: flex; gap: 6px; align-items: center; }
-.colors input[type="color"] { width: 32px; height: 26px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; }
+.swatch { justify-self: end; width: 44px; height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+.filaments { display: grid; gap: 4px; font-size: 13px; }
+.filaments .fil { display: flex; align-items: center; gap: 8px; }
+.filaments .chip { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
 
 .view { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--view); }
 .view-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }

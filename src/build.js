@@ -15,7 +15,31 @@ export const DEFAULT_SETTINGS = {
   edgeMargin: 1.5,
   sticker: { preset: 'rect-44x28', shape: 'rect', w: 44, h: 28, d: 30, t: 1, clear: 0.3 },
   switch: { w: 83, h: 82.2, indent: 'inside', iw: 1, ih: 3.65 },
+  // print colours; every distinct colour becomes one filament in the 3MF
+  colors: { frame: '#adadad', plate: '#adadad', logo: '#000000', ring: '#000000', icon: '#000000', textBelow: '#000000', textAbove: '#000000' },
 };
+
+// layout part -> colour key, in paint priority (an earlier part wins where two overlap)
+const COLOR_OF = [['logo', 'logo'], ['icon', 'icon'], ['textBelow', 'textBelow'], ['textAbove', 'textAbove'], ['frame', 'ring']];
+/**
+ * Split the motif into one CrossSection per colour (parts of the same colour merge).
+ * @returns [{ color, keys: [colour keys], cs }]
+ */
+export function motifLayers(parts, colors) {
+  const by = new Map();
+  let taken = null;
+  for (const [part, key] of COLOR_OF) {
+    let cs = parts[part];
+    if (!cs || cs.isEmpty()) continue;
+    if (taken) cs = cs.subtract(taken);
+    taken = taken ? taken.add(parts[part]) : parts[part];
+    const c = (colors?.[key] || '#000000').toLowerCase();
+    const L = by.get(c) || { color: c, keys: [], cs: null };
+    L.keys.push(key); L.cs = L.cs ? L.cs.add(cs) : cs;
+    by.set(c, L);
+  }
+  return [...by.values()].map((L) => ({ ...L, cs: L.cs.simplify(0.01) })).filter((L) => !L.cs.isEmpty());
+}
 
 const roundedRect = (CS, w, h, r) => {
   r = Math.max(0, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3));
@@ -128,8 +152,13 @@ export function layoutFront(wasm, model, s, shapes, font) {
   return { motif2d, parts, group, flat: { halfW, halfH }, warnings };
 }
 
-/** Cover body with chamfer, magnet pockets and the inlay cut; and the motif solid. */
-export function buildCover(wasm, model, motif2d, yShift = 0, notch = null, magPos = null) {
+/**
+ * Cover body with chamfer, magnet pockets and the inlay cut, and the motif solids.
+ * @param motif  CrossSection, or motifLayers() output for one part per colour
+ * @returns { cover, motif (all colours together, or null), motifs: [{ color, keys, man }] }
+ */
+export function buildCover(wasm, model, motif, yShift = 0, notch = null, magPos = null) {
+  const layers = !motif ? [] : Array.isArray(motif) ? motif : [{ color: null, keys: [], cs: motif }];
   const { Manifold, CrossSection: CS } = wasm;
   const P = model.plate, M = model.magnets;
   const outline = roundedRect(CS, P.w, P.h, P.corner_r);
@@ -142,14 +171,19 @@ export function buildCover(wasm, model, motif2d, yShift = 0, notch = null, magPo
   const pockets = Manifold.union((magPos || M.pos).map(([x, y]) =>
     Manifold.cylinder(d + 0.01, r, r, 64).translate([x, P.cy + y, P.split_z - 0.01])));
   let cover = body.subtract(pockets);
-  let motif = null;
-  if (motif2d && !motif2d.isEmpty()) {
-    const z0 = P.depth - P.motif_d;
-    const shifted = motif2d.translate([0, P.cy]);
-    motif = shifted.extrude(P.motif_d).translate([0, 0, z0]).intersect(body);
+  const z0 = P.depth - P.motif_d;
+  let motifs = [];
+  for (const L of layers) {
+    if (!L.cs || L.cs.isEmpty()) continue;
+    const shifted = L.cs.translate([0, P.cy]);
+    const man = shifted.extrude(P.motif_d).translate([0, 0, z0]).intersect(body);
     cover = cover.subtract(shifted.extrude(P.motif_d + 1).translate([0, 0, z0]));
-    if (motif.isEmpty()) motif = null;
+    if (!man.isEmpty()) motifs.push({ color: L.color, keys: L.keys, man });
   }
-  if (yShift) { cover = cover.translate([0, yShift, 0]); motif = motif && motif.translate([0, yShift, 0]); }
-  return { cover, motif };
+  if (yShift) {
+    cover = cover.translate([0, yShift, 0]);
+    motifs = motifs.map((m) => ({ ...m, man: m.man.translate([0, yShift, 0]) }));
+  }
+  const all = motifs.length ? Manifold.union(motifs.map((m) => m.man)) : null;
+  return { cover, motif: all, motifs };
 }
