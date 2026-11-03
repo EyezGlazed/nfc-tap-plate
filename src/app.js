@@ -74,8 +74,8 @@ const isRound = () => state.settings.sticker.shape === 'round';
 const indentOn = () => state.settings.switch.indent !== 'none';
 const SCHEMA = [
   { title: 'Light switch cover', hint: 'Measure the switch cover the frame clamps around. The hinges and latch stay the same; the bars get longer or shorter.', fields: [
-    num('settings.switch.w', 'Width', 'mm', 0.1, 55, 200),
-    num('settings.switch.h', 'Height', 'mm', 0.1, 64, 200),
+    num('settings.switch.w', 'Width', 'mm', 0.1, 28, 200),
+    num('settings.switch.h', 'Height', 'mm', 0.1, 10.2, 200),
     sel('settings.switch.indent', 'Step near the wall', [['inside', 'Narrower: frame hooks in'], ['outside', 'Wider rim: frame clears it'], ['none', 'None: straight sides']]),
     { ...num('settings.switch.iw', 'Step width (per side)', 'mm', 0.1, 0.2, 5), show: indentOn },
     { ...num('settings.switch.ih', 'Step height from the wall', 'mm', 0.1, 0.5, 8.5), show: indentOn },
