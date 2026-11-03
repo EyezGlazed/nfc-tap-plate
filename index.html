@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFC Tap Plate</title>
+<meta name="description" content="Design the front of a magnetic NFC tag plate for a light switch frame: your own logo, icon and text, exported as one print-ready 3MF.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='2' width='20' height='28' rx='4' fill='%23222'/%3E%3Cpath d='M11 22V10l10 12V10' stroke='%23e0473c' stroke-width='3' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="src/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+    "manifold-3d": "https://cdn.jsdelivr.net/npm/manifold-3d@3.5.4/manifold.js",
+    "opentype.js": "https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.module.js",
+    "svgpath": "https://cdn.jsdelivr.net/npm/svgpath@2.6.0/+esm",
+    "clipper-lib": "https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/+esm",
+    "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+  }
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="6" y="2" width="20" height="28" rx="4"/><path d="M11 22V10l10 12V10"/></svg>
+    <div>
+      <h1>NFC Tap Plate</h1>
+      <p>Design the front of the tag plate. Everything runs in your browser.</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="btn-load" class="ghost" type="button">Open design…</button>
+    <button id="btn-save" class="ghost" type="button">Save design</button>
+    <button id="btn-export" class="primary" type="button">Download 3MF</button>
+  </div>
+</header>
+<main>
+  <aside id="panel" aria-label="Settings"></aside>
+  <section class="view">
+    <div class="view-bar" role="toolbar" aria-label="View">
+      <div class="seg" id="view-seg">
+        <button type="button" data-view="front" aria-pressed="true">Front</button>
+        <button type="button" data-view="3d" aria-pressed="false">3D</button>
+        <button type="button" data-view="print" aria-pressed="false">Print plate</button>
+      </div>
+      <span class="hint-mouse">Drag: rotate · Shift + middle drag: move · Wheel: zoom</span>
+      <span id="status" class="status" aria-live="polite">Loading…</span>
+    </div>
+    <div id="canvas-wrap"></div>
+    <ul id="warnings" class="warnings" aria-live="polite"></ul>
+  </section>
+</main>
+<input type="file" id="file-design" accept=".json,application/json" hidden>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

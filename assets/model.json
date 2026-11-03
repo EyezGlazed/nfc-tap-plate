@@ -1,0 +1,139 @@
+{
+  "source": "NFC Wifi plate.FCStd (FreeCAD master model), exported by tools/export_from_freecad.py",
+  "units": "mm; assembled coordinates, z = 0 is the wall, +z is the front, plate centre at (0, plate_cy)",
+  "plate": {
+    "w": 71,
+    "h": 108,
+    "corner_r": 4,
+    "cy": -99.1,
+    "depth": 9.5,
+    "split_z": 6.5,
+    "cover_t": 3,
+    "chamfer": 2,
+    "motif_d": 0.4
+  },
+  "magnets": {
+    "dia": 6,
+    "t": 2,
+    "fit": 0.2,
+    "pos": [
+      [
+        -29.5,
+        47.99999999999999
+      ],
+      [
+        29.5,
+        47.99999999999999
+      ],
+      [
+        -29.5,
+        -48.00000000000001
+      ],
+      [
+        29.5,
+        -48.00000000000001
+      ]
+    ]
+  },
+  "card_pocket": {
+    "x0": -22.15,
+    "x1": 22.150000000000002,
+    "y0": -14.150000000000006,
+    "y1": 14.150000000000006
+  },
+  "latch": {
+    "pivot": [
+      -43.5,
+      -43.1
+    ],
+    "print_angle": 45
+  },
+  "frame": {
+    "open_w": 83,
+    "open_h": 82.2,
+    "wall": 4,
+    "depth": 9.5,
+    "lip_w": 1,
+    "lip_h": 3.65,
+    "hinge_clear": 0.4,
+    "dt_d": 2.5,
+    "dt_x": 20,
+    "dt_w1": 8,
+    "cut": {
+      "x": 25,
+      "y": 25
+    },
+    "shrink_max": {
+      "x": 14,
+      "y": 9
+    },
+    "hinge_inset": 2,
+    "kn_r": 3.5,
+    "kn_rc": 3.9
+  },
+  "base": {
+    "pocket": {
+      "w": 44,
+      "h": 28,
+      "t": 1,
+      "clear": 0.3,
+      "extra_depth": 0.3
+    },
+    "scoop_r": 6,
+    "fill": {
+      "x0": -22.2,
+      "x1": 28.200000000000003,
+      "y0": -14.200000000000001,
+      "y1": 14.200000000000001,
+      "z0": 4.15
+    }
+  },
+  "parts": {
+    "frame_a": {
+      "file": "assets/parts/frame_a.stl",
+      "facets": 2884
+    },
+    "frame_b": {
+      "file": "assets/parts/frame_b.stl",
+      "facets": 4806
+    },
+    "latch": {
+      "file": "assets/parts/latch.stl",
+      "facets": 1904
+    },
+    "plate_base": {
+      "file": "assets/parts/plate_base.stl",
+      "facets": 2866
+    }
+  },
+  "defaults": {
+    "logo": {
+      "svg": "assets/logos/n-mark.svg",
+      "height": 24,
+      "x": 0.0,
+      "y": -0.0
+    },
+    "frame": {
+      "on": true,
+      "w": 48.3,
+      "h": 32.3,
+      "r": 2,
+      "line": 2.4
+    },
+    "icon": {
+      "svg": "assets/logos/signal-arcs.svg",
+      "height": 13.986,
+      "gap": 3.214
+    },
+    "text_below": {
+      "lines": [
+        "Tap here",
+        "for WiFi"
+      ],
+      "size": 10
+    },
+    "text_above": {
+      "lines": []
+    }
+  }
+}
