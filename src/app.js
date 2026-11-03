@@ -287,7 +287,8 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8a8a, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 scene.add(sun);
 const camera = new THREE.PerspectiveCamera(28, 1, 1, 5000);
-// Mouse: left drag rotates, Shift + middle drag pans, middle drag / wheel zooms.
+// Mouse: left drag rotates, Shift + left or middle drag pans (Shift + left is built into
+// OrbitControls), middle drag / wheel zooms.
 // Right button does nothing here (users may have mouse gestures on it).
 function makeControls() {
   const c = new OrbitControls(camera, renderer.domElement);
