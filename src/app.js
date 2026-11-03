@@ -296,9 +296,11 @@ function makeControls() {
   c.addEventListener('change', () => { sun.position.copy(camera.position).add(new THREE.Vector3(60, 120, 80)); render(); });
   return c;
 }
-// decide pan vs zoom before OrbitControls sees the press (capture phase on the parent)
+// decide pan vs zoom before OrbitControls sees the press (capture phase on the parent).
+// OrbitControls swaps ROTATE <-> PAN while Shift is held, so Shift + middle must be mapped
+// to ROTATE to come out as PAN (mapping it to PAN gave a rotate; user report).
 wrapEl.addEventListener('pointerdown', (e) => {
-  if (e.button === 1) controls.mouseButtons.MIDDLE = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.DOLLY;
+  if (e.button === 1) controls.mouseButtons.MIDDLE = e.shiftKey ? THREE.MOUSE.ROTATE : THREE.MOUSE.DOLLY;
 }, true);
 wrapEl.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // no auto-scroll
 let controls = makeControls();
