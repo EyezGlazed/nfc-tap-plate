@@ -44,9 +44,9 @@
   "latch": {
     "pivot": [
       -43.5,
-      -43.1
+      43.1
     ],
-    "print_angle": 45
+    "print_angle": -45
   },
   "frame": {
     "open_w": 83,
@@ -67,11 +67,19 @@
       "x": 14
     },
     "band_y": [
-      -34,
-      38.5
+      -38.5,
+      34
     ],
     "mid_x": 15.5,
     "dt_web_min": 5,
+    "T": [
+      1,
+      -1
+    ],
+    "Q": [
+      -1,
+      1
+    ],
     "hinge_inset": 2,
     "kn_r": 3.5,
     "kn_rc": 3.9
@@ -96,11 +104,11 @@
   "parts": {
     "frame_a": {
       "file": "assets/parts/frame_a.stl",
-      "facets": 2884
+      "facets": 2920
     },
     "frame_b": {
       "file": "assets/parts/frame_b.stl",
-      "facets": 4806
+      "facets": 4774
     },
     "latch": {
       "file": "assets/parts/latch.stl",
@@ -115,8 +123,8 @@
     "logo": {
       "svg": "assets/logos/n-mark.svg",
       "height": 24,
-      "x": 0,
-      "y": 0
+      "x": 0.0,
+      "y": -0.0
     },
     "frame": {
       "on": true,

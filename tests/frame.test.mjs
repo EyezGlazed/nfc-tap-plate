@@ -30,7 +30,7 @@ test('stretch moves the far side and keeps one solid', () => {
 });
 
 test('default switch cover reproduces the CAD frame', () => {
-  const r = buildFrame(wasm, parts, F, model.latch.pivot, DEF);
+  const r = buildFrame(wasm, parts, F, model.latch, DEF);
   // the regenerated lip differs from CAD only next to the knuckles (gap kept at kn_rc)
   near(r.frame_a.volume(), parts.frame_a.volume(), 3, 'A volume');
   near(r.frame_b.volume(), parts.frame_b.volume(), 3, 'B volume');
@@ -40,7 +40,7 @@ test('default switch cover reproduces the CAD frame', () => {
 
 for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56, 12], [40, 82.2], [28, 50]]) {
   test(`switch cover ${w} x ${h}: valid, hinge and latch clearances kept`, () => {
-    const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w, h });
+    const r = buildFrame(wasm, parts, F, model.latch, { ...DEF, w, h });
     one(r.frame_a, 'A'); one(r.frame_b, 'B');
     assert.ok(r.frame_a.minGap(r.frame_b, 1) >= 0.39, `A-B gap ${r.frame_a.minGap(r.frame_b, 1)}`);
     // latch as printed: swung open about its pivot (closed, it sits 0.07 from A by design)
@@ -60,11 +60,11 @@ for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56,
 }
 
 test('too small is refused with a clear message', () => {
-  assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w: 27 }), /can't go below/);
+  assert.throws(() => buildFrame(wasm, parts, F, model.latch, { ...DEF, w: 27 }), /can't go below/);
 });
 
 test('no step: only the knuckle nibs stay in the opening (no leftover lip)', () => {
-  const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, indent: 'none' });
+  const r = buildFrame(wasm, parts, F, model.latch, { ...DEF, indent: 'none' });
   const open = wasm.CrossSection.square([F.open_w - 0.02, F.open_h - 0.02], true).extrude(F.depth); // inset: skip touching faces
   for (const [k, m] of [['A', r.frame_a], ['B', r.frame_b], ['latch', r.latch]]) {
     const inside = m.intersect(open);
@@ -78,19 +78,19 @@ test('no step: only the knuckle nibs stay in the opening (no leftover lip)', () 
 
 test('inside lip of any width keeps the hinge gap and splits cleanly', () => {
   for (const iw of [0.5, 1, 2, 3]) {
-    const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, iw, ih: 4 });
+    const r = buildFrame(wasm, parts, F, model.latch, { ...DEF, iw, ih: 4 });
     one(r.frame_a, `A iw ${iw}`); one(r.frame_b, `B iw ${iw}`);
     assert.ok(r.frame_a.minGap(r.frame_b, 1) >= 0.39, `iw ${iw}: A-B gap ${r.frame_a.minGap(r.frame_b, 1)}`);
   }
 });
 
 test('indent options: none, wider inside lip, outside recess', () => {
-  const none = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, indent: 'none' });
-  const ins = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, iw: 2, ih: 5 });
-  const out = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, indent: 'outside', iw: 0.6, ih: 2 });
+  const none = buildFrame(wasm, parts, F, model.latch, { ...DEF, indent: 'none' });
+  const ins = buildFrame(wasm, parts, F, model.latch, { ...DEF, iw: 2, ih: 5 });
+  const out = buildFrame(wasm, parts, F, model.latch, { ...DEF, indent: 'outside', iw: 0.6, ih: 2 });
   for (const r of [none, ins, out]) { one(r.frame_a, 'A'); one(r.frame_b, 'B'); assert.ok(r.frame_a.minGap(r.frame_b, 1) >= 0.39); }
   const v = (r) => r.frame_a.volume() + r.frame_b.volume();
-  const base = buildFrame(wasm, parts, F, model.latch.pivot, DEF);
+  const base = buildFrame(wasm, parts, F, model.latch, DEF);
   assert.ok(v(none) < v(base) - 250, 'lip removed');
   assert.ok(v(ins) > v(base) + 500, 'wider, taller lip');
   assert.ok(v(out) < v(none) - 100, 'recess cut');
@@ -113,7 +113,7 @@ test('sticker pocket: default matches CAD, round and other sizes cut cleanly', (
 test('height limit: one slice from the side-bar band, clear error below it', () => {
   const minH = F.open_h - (F.band_y[1] - F.band_y[0]) + 0.5;
   assert.ok(minH < 15, `min height ${minH}`);
-  assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, h: minH - 1 }), /can't go below/);
+  assert.throws(() => buildFrame(wasm, parts, F, model.latch, { ...DEF, h: minH - 1 }), /can't go below/);
 });
 
 test('narrow frames: dovetails move inward, tongues follow, plate notched for latch + knuckle', () => {
@@ -121,7 +121,7 @@ test('narrow frames: dovetails move inward, tongues follow, plate notched for la
   const yTop = model.plate.cy + model.plate.h / 2;
   const tongues = (b) => b.intersect(wasm.Manifold.cube([200, 20, 50]).translate([-100, yTop + 0.01, -10]));
   const fit = (w, h) => {
-    const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w, h });
+    const r = buildFrame(wasm, parts, F, model.latch, { ...DEF, w, h });
     const mags = magnetPositions(wasm, model, r.plateNotch);
     const raw = buildBase(wasm, parts.plate_base, model, st, r.dtShift, r.plateNotch, mags.pos).base;
     const b = raw.translate([0, -r.dH / 2, 0]);

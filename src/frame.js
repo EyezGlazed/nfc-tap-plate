@@ -66,15 +66,19 @@ export function stretch(wasm, man, axis, c, d, dir) {
 
 const rect = (CS, w, h) => CS.square([w, h], true);
 const LATCH_OPEN = 45; // degrees the latch can swing open (its print pose); the plate notch clears all of it
+const FRAME_OPEN = 20; // degrees half B swings open about T when fitting the frame; the plate notch clears it
+const cornerName = ([sx, sy]) => `${sy > 0 ? 'top' : 'bottom'}-${sx > 0 ? 'right' : 'left'}`;
 
 /**
  * @param parts  { frame_a, frame_b, latch, plate_base? } manifolds (with plate_base, plateNotch is computed)
  *               (CAD geometry, 83 x 82.2 opening)
  * @param F      model.frame
+ * @param latchM model.latch: { pivot, print_angle } (the sign of print_angle is the opening direction)
  * @param sw     { w, h, indent: 'none'|'inside'|'outside', iw, ih }  switch cover
  * @returns { frame_a, frame_b, latch, dW, dH, dtShift, plateNotch, pivot, warnings, notes }
  */
-export function buildFrame(wasm, parts, F, latchPivot, sw) {
+export function buildFrame(wasm, parts, F, latchM, sw) {
+  const latchPivot = latchM.pivot, ls = Math.sign(latchM.print_angle) || 1;
   const { CrossSection: CS } = wasm;
   const warnings = [], notes = []; // warnings: something to fix; notes: good to know
   const dW = sw.w - F.open_w, dH = sw.h - F.open_h;
@@ -101,13 +105,18 @@ export function buildFrame(wasm, parts, F, latchPivot, sw) {
     return stretch(wasm, m, 1, (b0 + b1) / 2 + dH / 2, dH, 1).translate([0, -dH / 2, 0]);
   };
   let A = grow(parts.frame_a), B = grow(parts.frame_b);
-  const latch = parts.latch.translate([-dW / 2, -dH / 2, 0]);
+  // the latch moves with its corner (Q)
+  const [qsx, qsy] = F.Q, [tsx, tsy] = F.T;
+  const latch = parts.latch.translate([qsx * dW / 2, qsy * dH / 2, 0]);
 
   // ---- indent near the wall
   const W = sw.w, H = sw.h;
-  // hinge axes (T top right, Q bottom left): the knuckles (radius kn_r) are kept as they are
+  // hinge axes: T (open hinge) and Q (latch pivot), hinge_inset inside the outer corners;
+  // the knuckles (radius kn_r) are kept as they are
   const ax = W / 2 + F.wall - F.hinge_inset, ay = H / 2 + F.wall - F.hinge_inset;
-  const disc = (r) => CS.compose([CS.circle(r, 96).translate([ax, ay]), CS.circle(r, 96).translate([-ax, -ay])]);
+  const T = [tsx * ax, tsy * ay], Q = [qsx * ax, qsy * ay];
+  const disc = (r) => CS.compose([CS.circle(r, 96).translate(T), CS.circle(r, 96).translate(Q)]);
+  const corners = `${cornerName(F.T)} and ${cornerName(F.Q)}`;
   const zcut = (cs, h) => cs.extrude(h + 0.05).translate([0, 0, -0.05]);
   // remove the CAD lip (1 x 3.65) everywhere except inside the knuckles
   const oldLip = rect(CS, W + 0.02, H + 0.02).subtract(rect(CS, W - 2 * F.lip_w - 0.02, H - 2 * F.lip_w - 0.02)).subtract(disc(F.kn_r));
@@ -117,15 +126,31 @@ export function buildFrame(wasm, parts, F, latchPivot, sw) {
     if (sw.ih > F.depth - 1) throw new Error(`Indent height can be at most ${F.depth - 1} mm.`);
     // new lip keeps the hinge clearance (kn_rc) from the knuckles of the other half
     const ring = rect(CS, W + 0.1, H + 0.1).subtract(rect(CS, W - 2 * sw.iw, H - 2 * sw.iw)).subtract(disc(F.kn_rc));
-    // A owns the top and left bars (above the T-Q diagonal), B the right and bottom bars,
-    // with a hinge_clear gap between them along the diagonal
-    const len = Math.hypot(W, H), g = F.hinge_clear / 2, L = 1000;
-    const ux = W / len, uy = H / len, nx = -uy, ny = ux; // along the diagonal, and its normal toward A
-    const half = (s) => { // s = +1: A side, -1: B side, each g away from the diagonal
-      const p = (t, k) => [t * ux + (s * g + k * s) * nx, t * uy + (s * g + k * s) * ny];
-      return new CS([[p(-L, 0), p(L, 0), p(L, L), p(-L, L)]], 'NonZero');
+    // A and B meet only at the two hinge corners. The corners are moved, not rotated, when the
+    // frame is resized, so at each corner the split runs through that axis at the CAD angle
+    // (not along the resized diagonal), with a hinge_clear gap. A owns the horizontal bar at
+    // T and the vertical (left) bar at Q; each corner rules the half of the ring nearer to it.
+    const ax0 = F.open_w / 2 + F.wall - F.hinge_inset, ay0 = F.open_h / 2 + F.wall - F.hinge_inset;
+    const len = Math.hypot(ax0, ay0), g = F.hinge_clear / 2, L = 1000;
+    const ux = (tsx * ax0) / len, uy = (tsy * ay0) / len; // CAD split direction (Q -> T)
+    const poly = (pts) => new CS([pts], 'NonZero');
+    const halfAt = (c, ref, s) => { // half-plane through corner c, on the side of ref (s = +1) or away from it (s = -1), g off the line
+      let nx = -uy, ny = ux;
+      if ((ref[0] - c[0]) * nx + (ref[1] - c[1]) * ny < 0) { nx = -nx; ny = -ny; }
+      const p = (t, k) => [c[0] + t * ux + s * (g + k) * nx, c[1] + t * uy + s * (g + k) * ny];
+      return poly([p(-L, 0), p(L, 0), p(L, L), p(-L, L)]);
     };
-    const ringA = ring.intersect(half(1)), ringB = ring.intersect(half(-1));
+    // away from the hinge corners each bar's lip goes to the half that owns the bar
+    const ownA = poly([[Math.sign(Q[0]) * (W / 2 - sw.iw - 0.5), -L], [Math.sign(Q[0]) * L, -L], [Math.sign(Q[0]) * L, L], [Math.sign(Q[0]) * (W / 2 - sw.iw - 0.5), L]])
+      .add(poly([[-L, Math.sign(T[1]) * (H / 2 - sw.iw - 0.5)], [L, Math.sign(T[1]) * (H / 2 - sw.iw - 0.5)], [L, Math.sign(T[1]) * L], [-L, Math.sign(T[1]) * L]]));
+    // corner boxes (opening corner at T and at Q, reaching s inward and past the knuckles)
+    const s = Math.min(Math.max(sw.iw, F.kn_rc) + 1, W / 2 - 0.1, H / 2 - 0.1);
+    const box = (c) => { const x = Math.sign(c[0]) * W / 2, y = Math.sign(c[1]) * H / 2, dx = -Math.sign(c[0]), dy = -Math.sign(c[1]);
+      return poly([[x - dx * 10, y - dy * 10], [x + dx * s, y - dy * 10], [x + dx * s, y + dy * s], [x - dx * 10, y + dy * s]]); };
+    const bT = box(T), bQ = box(Q), rest = ring.subtract(bT).subtract(bQ);
+    const refT = [0, T[1]], refQ = [Q[0], 0];
+    const ringA = rest.intersect(ownA).add(ring.intersect(bT).intersect(halfAt(T, refT, 1))).add(ring.intersect(bQ).intersect(halfAt(Q, refQ, 1)));
+    const ringB = rest.subtract(ownA).add(ring.intersect(bT).intersect(halfAt(T, refT, -1))).add(ring.intersect(bQ).intersect(halfAt(Q, refQ, -1)));
     A = A.add(ringA.extrude(sw.ih));
     B = B.add(ringB.extrude(sw.ih));
     if (sw.iw > 3) warnings.push('Indent wider than 3 mm: check that the switch rocker still has room.');
@@ -137,34 +162,45 @@ export function buildFrame(wasm, parts, F, latchPivot, sw) {
     const recess = rect(CS, W + 2 * sw.iw, H + 2 * sw.iw).subtract(rect(CS, W - 0.1, H - 0.1)).subtract(disc(F.kn_r + 0.6));
     A = A.subtract(zcut(recess, sw.ih));
     B = B.subtract(zcut(recess, sw.ih));
-    notes.push('The recess goes around the two hinge knuckles in the top-right and bottom-left corners. A rim with rounded corners fits there.');
+    notes.push(`The recess goes around the two hinge knuckles in the ${corners} corners. A rim with rounded corners fits there.`);
   }
   if (sw.indent !== 'inside') {
     const d = F.wall - F.hinge_inset, nib = Math.sqrt(F.kn_r ** 2 - d ** 2) - d; // along each edge
-    notes.push(`Check your switch cover's corners: the hinge knuckles take a small rounded nib (about ${nib.toFixed(1)} × ${nib.toFixed(1)} mm) out of the top-right and bottom-left corners of the opening. A cover with corners rounded 1.5 mm or more fits.`);
+    notes.push(`Check your switch cover's corners: the hinge knuckles take a small rounded nib (about ${nib.toFixed(1)} × ${nib.toFixed(1)} mm) out of the ${corners} corners of the opening. A cover with corners rounded 1.5 mm or more fits.`);
   }
   // booleans on touching faces can leave zero-volume specks: keep only real solids
   const clean = (m) => wasm.Manifold.compose(m.decompose().filter((p) => p.volume() > 0.01));
   A = clean(A); B = clean(B);
 
-  // Narrow frames (below about 73 wide) bring the bottom-left knuckle and the latch over the
-  // plate's top-left corner. The plate and cover then get a notch: the knuckle plus
-  // everything the latch sweeps from closed to swung fully open, with print-in-place clearance.
-  const pivot = [latchPivot[0] - dW / 2, latchPivot[1] - dH / 2];
+  // Narrow frames (below about 73 wide) bring a corner hinge over the plate's top edge. The
+  // plate and cover then get a notch: whatever of either half reaches below the plate's top
+  // edge, B swinging open about T, and the latch from closed to swung fully open, all with
+  // print-in-place clearance. (With the latch at the top, only the T knuckle matters.)
+  const pivot = [latchPivot[0] + qsx * dW / 2, latchPivot[1] + qsy * dH / 2];
   let plateNotch = null;
-  if (parts.plate_base) {
+  const pbb = parts.plate_base && parts.plate_base.boundingBox();
+  // nothing reaches the plate while the frame is clearly wider than it (default size): skip (speed)
+  if (pbb && W / 2 + F.wall < pbb.max[0] + 8) {
     const plateTop = -(F.open_h / 2 + F.wall) - dH / 2; // assembled
     // the base's top corners are square (it butts against the frame): use its bounding box
-    const pb = parts.plate_base.boundingBox();
+    const pb = pbb;
     const plate2d = CS.square([pb.max[0] - pb.min[0], pb.max[1] - pb.min[1]]).translate([pb.min[0], pb.min[1] - dH / 2]);
-    const below = B.intersect(slabBox(wasm, 1, -BIG, plateTop - 0.01)).project(); // only what reaches past the plate's top edge
+    const low = slabBox(wasm, 1, -BIG, plateTop - 0.01); // only what reaches past the plate's top edge
+    const sweep = [A.intersect(low).project(), B.intersect(low).project()];
+    // only B's corner near T can swing below the plate's top edge: crop it first (speed)
+    const R = 15, near = wasm.Manifold.cube([2 * R, 2 * R, 100]).translate([T[0] - R, T[1] - R, -50]);
+    const bAtT = B.intersect(near).translate([-T[0], -T[1], 0]);
+    const openDir = -Math.sign(T[0] * T[1]) || 1; // B opens away from A: clockwise when T is bottom-right
+    for (let a = 2.5; a <= FRAME_OPEN + 0.01; a += 2.5) {
+      const r = bAtT.rotate([0, 0, openDir * a]).translate([T[0], T[1], 0]).intersect(low);
+      if (!r.isEmpty()) sweep.push(r.project());
+    }
     const lat = latch.project().translate([-pivot[0], -pivot[1]]);
-    const sweep = [below];
-    for (let a = -5; a <= LATCH_OPEN + 0.01; a += 2.5) sweep.push(lat.rotate(a).translate(pivot));
+    for (let a = -5; a <= LATCH_OPEN + 0.01; a += 2.5) sweep.push(lat.rotate(ls * a).translate(pivot));
     const reach = CS.union(sweep).offset(F.hinge_clear, 'Round', 2, 48);
     if (reach.intersect(plate2d).area() > 1e-3) {
       plateNotch = reach.intersect(plate2d.offset(1, 'Miter')).translate([0, dH / 2]).simplify(0.01); // plate coords
-      notes.push('The frame is narrower than the plate, so the plate and its cover get a notch in the top-left corner where the hinge and latch swing.');
+      notes.push('The frame is narrower than the plate, so the plate and its cover get a small notch at the top corner where the hinge sits.');
     }
   }
   return {

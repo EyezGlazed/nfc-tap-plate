@@ -65,10 +65,11 @@ def write_svg(faces, fname, cx, cy):
 
 cy = g('plate_cy')
 zf = g('depth')
+# printed bodies: the frame is mirrored top-to-bottom (latch top-left, hinge bottom-right)
 parts = {
-    'frame_a': write_stl('Frame_A', 'frame_a.stl'),
-    'frame_b': write_stl('Frame_B', 'frame_b.stl'),
-    'latch': write_stl('Latch', 'latch.stl'),
+    'frame_a': write_stl('Frame_A_M', 'frame_a.stl'),
+    'frame_b': write_stl('Frame_B_M', 'frame_b.stl'),
+    'latch': write_stl('Latch_M', 'latch.stl'),
     'plate_base': write_stl('Plate', 'plate_base.stl'),
 }
 nmark = write_svg(front_faces(['Pad_Motif_NMark'], zf), 'n-mark.svg', 0, cy)
@@ -85,21 +86,24 @@ model = {
     'magnets': {'dia': g('mag_dia'), 't': g('mag_t'), 'fit': g('mag_fit'),
                 'pos': [[sx * g('px'), g('py_top') - cy - k * g('py_span')] for k in (0, 1) for sx in (-1, 1)]},
     'card_pocket': {'x0': card.XMin, 'x1': card.XMax, 'y0': card.YMin - cy, 'y1': card.YMax - cy},
-    'latch': {'pivot': [-g('hx'), -g('hy')], 'print_angle': 45},
+    # latch pivot Q (top-left); it prints swung open by print_angle (clockwise = open)
+    'latch': {'pivot': [-g('hx'), g('hy')], 'print_angle': -45},
     # Frame stretching (src/frame.js). The bars have a constant cross-section between the
     # cut planes and the stretch limits below. These were measured on the exported meshes:
-    # top bar -40..39.5, bottom bar +-24.5..+-39.5 (outside the dovetail grooves),
-    # left bar -34..39.5 (above the latch window), right bar -39..39. Height shrinks by one
+    # top bar -39.5..40, bottom bar +-24.5..+-39.5 (outside the dovetail grooves),
+    # left bar -39.5..34 (below the latch window), right bar -39..39. Height shrinks by one
     # slice from the middle of band_y (both side bars prismatic there).
     'frame': {'open_w': g('open_w'), 'open_h': g('open_h'), 'wall': g('wall'), 'depth': g('depth'),
               'lip_w': g('lip'), 'lip_h': g('lip_depth'), 'hinge_clear': g('hinge_clear'),
               'dt_d': g('dt_d'), 'dt_x': g('dt_x'), 'dt_w1': g('dt_w1'),
-              'cut': {'x': 25, 'y': 25}, 'shrink_max': {'x': 14}, 'band_y': [-34, 38.5],
+              'cut': {'x': 25, 'y': 25}, 'shrink_max': {'x': 14}, 'band_y': [-38.5, 34],
               # below 55 wide, a middle slice (|x| < mid_x, between the grooves) moves the
               # dovetails inward, keeping dt_web_min between the grooves' inner edges
               'mid_x': 15.5, 'dt_web_min': 5,
-              # hinge axes sit hinge_inset inside the outer corners (T top right, Q bottom left);
-              # knuckles have radius kn_r, the clearance groove in the other half kn_rc
+              # hinge axes sit hinge_inset inside the outer corners: T (open hinge) bottom right,
+              # Q (latch pivot) top left; corner signs below. A owns the left + bottom bars,
+              # B the right + top bars. Knuckles have radius kn_r, the clearance groove kn_rc
+              'T': [1, -1], 'Q': [-1, 1],
               'hinge_inset': g('hinge_inset'), 'kn_r': g('kn_r'), 'kn_rc': g('kn_rc')},
     'base': {'pocket': {'w': g('card_w'), 'h': g('card_h'), 't': g('card_t'), 'clear': g('card_clear'),
                         'extra_depth': round(g('slot_t') - g('card_t'), 3)},

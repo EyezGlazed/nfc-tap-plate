@@ -480,7 +480,7 @@ async function rebuild() {
     const fk = JSON.stringify(S.switch), bk = JSON.stringify(S.sticker) + fk;
     if (fk !== frameKey) {
       frameKey = '';
-      frameRes = buildFrame(wasm, fixedMan, model.frame, model.latch.pivot, S.switch);
+      frameRes = buildFrame(wasm, fixedMan, model.frame, model.latch, S.switch);
       for (const k of ['frame_a', 'frame_b', 'latch']) fixed[k] = fromManifold(k, frameRes[k]);
       frameRes.mags = magnetPositions(wasm, model, frameRes.plateNotch);
       if (frameRes.mags.moved.length) {

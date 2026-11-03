@@ -31,13 +31,21 @@ the Fusion STEP) and local paths out of it.
     the middle of model.frame.band_y, where both side bars are prismatic (min about
     28 x 10.2). The old two-cut y shrink stopped at 64.2, which the user called out as far
     too much.
+  - Layout (2026-11-03, user request): the CAD frame is MIRRORED top-to-bottom. The open
+    hinge T is bottom-right, the latch pivot Q top-left (model.frame.T / .Q are the corner
+    signs; nothing else may hard-code them). A owns the left + bottom bars (with the
+    dovetail grooves), B the right + top bars. The latch prints swung open by
+    model.latch.print_angle = -45 (clockwise opens). `buildFrame` takes the whole
+    `model.latch`.
   - The latch, plate and cover move with their corner (base/cover by -dH/2 in y).
-  - Below about 73 wide the bottom-left knuckle and the latch reach over the plate's
-    (square) top-left corner. `buildFrame` then returns `plateNotch` (2D, plate coords):
-    the frame B parts below the plate's top edge plus the latch swept from -5 to 45 deg
-    open, offset by hinge_clear. Base and cover subtract it. `magnetPositions` moves any
-    magnet down until it has a 1.2 mm wall to the notch (base pocket refilled and recut,
-    cover pockets follow). Before this fix the knuckle dug into the plate below ~73 wide.
+  - Below about 73 wide the T knuckle reaches 1.5 mm over the plate's (square) top-right
+    corner. `buildFrame` then returns `plateNotch` (2D, plate coords): what of A or B
+    reaches below the plate's top edge, B swinging open about T up to FRAME_OPEN (20 deg),
+    and the latch swept to fully open, all offset by hinge_clear (at most about 11 mm2,
+    1.9 deep). Skipped while the frame is clearly wider than the plate (speed). Base and
+    cover subtract it. `magnetPositions` moves any magnet down until it has a 1.2 mm wall
+    to the notch. With the old bottom-left latch the notch had to clear the latch swing
+    (5.8 deep, cutting into a magnet pocket), which is why the frame was mirrored.
   - Indent: the CAD lip is removed everywhere except inside the knuckle circles (kn_r
     around the hinge axes T and Q, hinge_inset in from the outer corners). The knuckles
     reach about 0.9 x 0.9 mm into those two opening corners; this is inherent to the
@@ -45,8 +53,10 @@ the Fusion STEP) and local paths out of it.
     - An earlier version kept 3 mm squares of the old lip there. The user saw them as
       "hinges protruding" with no step. Don't go back to that.
     - Then either a new lip ring is added, minus kn_rc circles so the hinge gap is kept,
-      and split along the T-Q diagonal with a hinge_clear gap (A gets top and left, B
-      gets right and bottom), or an outward recess is cut (minus kn_r + 0.6 circles). The recess warns when the wall
+      split between the halves: each bar's lip goes to the half owning the bar; in a small
+      box at each hinge corner the split runs through the axis at the CAD angle (corners
+      are moved, not rotated, so the resized T-Q diagonal is wrong there on non-square
+      frames), with a hinge_clear gap. Or an outward recess is cut (minus kn_r + 0.6 circles). The recess warns when the wall
     behind the dovetail grooves gets thin.
   - Zero-volume specks from the booleans are dropped (`clean`).
   - `buildBase` refills the CAD pocket + scoop (model.base.fill), then cuts the sticker
