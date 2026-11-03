@@ -5,7 +5,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { svgToCrossSection } from './svg2d.js';
 import { layoutFront, buildCover, DEFAULT_SETTINGS } from './build.js';
 import { parseBinarySTL, fromManifold, printPlate, write3MF, transform } from './export3mf.js';
-import { toManifold, buildFrame, buildBase, STICKER_PRESETS } from './frame.js';
+import { toManifold, buildFrame, buildBase, magnetPositions, STICKER_PRESETS } from './frame.js';
+import { outlineColor } from './contrast.js';
 
 const FONTS = [
   { id: 'open-sans-700', label: 'Open Sans Bold', file: 'assets/fonts/open-sans-latin-700-normal.woff' },
@@ -29,7 +30,7 @@ let state = {
   logoSvg: null, logoName: null, // null = default N-mark
   iconSvg: null, iconName: null, // null = default signal arcs
   fontId: 'open-sans-700', customFont: null, customFontName: null, // customFont: base64
-  view: { plate: '#26262a', motif: '#d6402f', showTag: true, showFrame: true },
+  view: { frame: '#adadad', plate: '#26262a', motif: '#d6402f', showTag: true, showFrame: true },
   out: { baseFil: 1, motifFil: 2, extras: true, bed: 256, frame: true, base: true, cover: true },
 };
 try {
@@ -239,10 +240,10 @@ function field(f) {
     });
   } else if (f.t === 'colors') {
     wrap.className = 'colors';
-    wrap.innerHTML = `<label><input type="color" value="${state.view.plate}"> Plate</label><label><input type="color" value="${state.view.motif}"> Motif</label>`;
-    const [a, b] = wrap.querySelectorAll('input');
-    a.addEventListener('input', () => { state.view.plate = a.value; persist(); paintColors(); });
-    b.addEventListener('input', () => { state.view.motif = b.value; persist(); paintColors(); });
+    wrap.innerHTML = ['frame', 'plate', 'motif'].map((k) => `<label><input type="color" data-k="${k}" value="${state.view[k]}"> ${k[0].toUpperCase() + k.slice(1)}</label>`).join('');
+    for (const inp of wrap.querySelectorAll('input')) {
+      inp.addEventListener('input', () => { state.view[inp.dataset.k] = inp.value; persist(); paintColors(); });
+    }
   } else if (f.t === 'preset') {
     wrap.className = 'row wide';
     wrap.innerHTML = `<label for="${id}">Common sizes</label><select id="${id}" data-preset><option value="">Custom</option>${STICKER_PRESETS.map((p) => `<option value="${p.id}">${p.label}</option>`).join('')}</select>`;
@@ -291,12 +292,21 @@ let controls = makeControls();
 const mats = {
   plate: new THREE.MeshStandardMaterial({ color: state.view.plate, roughness: 0.75, metalness: 0, flatShading: true }),
   motif: new THREE.MeshStandardMaterial({ color: state.view.motif, roughness: 0.6, metalness: 0, flatShading: true }),
-  fixed: new THREE.MeshStandardMaterial({ color: state.view.plate, roughness: 0.8, metalness: 0, flatShading: true }),
+  frame: new THREE.MeshStandardMaterial({ color: state.view.frame, roughness: 0.8, metalness: 0, flatShading: true }),
+  tag: new THREE.LineDashedMaterial({ color: 0x3fa7ff, dashSize: 1.6, gapSize: 1.2 }),
 };
 function paintColors() {
-  mats.plate.color.set(state.view.plate); mats.fixed.color.set(state.view.plate); mats.motif.color.set(state.view.motif);
+  mats.plate.color.set(state.view.plate); mats.frame.color.set(state.view.frame); mats.motif.color.set(state.view.motif);
+  paintTag();
   render();
 }
+// tag outline: WCAG AAA against the plate (and the motif where possible), AA where AAA can't be had
+function paintTag() {
+  const oc = outlineColor(state.view.plate, state.view.motif);
+  mats.tag.color.set(oc.color);
+  mats.tag.userData.contrast = oc;
+}
+paintTag();
 const groupAssembled = new THREE.Group();
 const groupPrint = new THREE.Group();
 scene.add(groupAssembled, groupPrint);
@@ -437,12 +447,17 @@ async function rebuild() {
       frameKey = '';
       frameRes = buildFrame(wasm, fixedMan, model.frame, model.latch.pivot, S.switch);
       for (const k of ['frame_a', 'frame_b', 'latch']) fixed[k] = fromManifold(k, frameRes[k]);
+      frameRes.mags = magnetPositions(wasm, model, frameRes.plateNotch);
+      if (frameRes.mags.moved.length) {
+        const dy = Math.max(...frameRes.mags.moved.map((m) => m.dy));
+        frameRes.notes.push(`The top-left magnet moves ${dy.toFixed(1)} mm down in the plate and cover, to keep a wall between it and the notch.`);
+      }
       frameKey = fk;
     }
     const yShift = -frameRes.dH / 2;
     if (bk !== baseKey) {
       baseKey = '';
-      const b = buildBase(wasm, fixedMan.plate_base, model, S.sticker);
+      const b = buildBase(wasm, fixedMan.plate_base, model, S.sticker, frameRes.dtShift, frameRes.plateNotch, frameRes.mags.pos);
       fixed.plate_base = transform(fromManifold('plate_base', b.base), [1, 0, 0, 0, 0, 1, 0, yShift, 0, 0, 1, 0]);
       fixed.baseWarnings = b.warnings;
       baseKey = bk;
@@ -451,12 +466,12 @@ async function rebuild() {
     notes.push(...frameRes.notes);
     const lay = layoutFront(wasm, model, S, { logo: lg.cs, icon }, f);
     warnings.push(...lay.warnings);
-    const { cover, motif } = buildCover(wasm, model, lay.motif2d, yShift);
+    const { cover, motif } = buildCover(wasm, model, lay.motif2d, yShift, frameRes.plateNotch, frameRes.mags.pos);
     current = { cover: fromManifold('Plate_Cover', cover), motif: motif ? fromManifold('Plate_Motif', motif) : null, lay };
     // assembled view
     clearGroup(groupAssembled);
     for (const k of ['frame_a', 'frame_b', 'latch', 'plate_base']) {
-      const o = meshObj(fixed[k], mats.fixed);
+      const o = meshObj(fixed[k], k === 'plate_base' ? mats.plate : mats.frame);
       o.userData.fixed = true;
       o.visible = state.view.showFrame;
       groupAssembled.add(o);
@@ -492,7 +507,7 @@ function makeOutlines(yShift) {
     const x = st.w / 2, y = st.h / 2;
     pts = [[-x, -y], [x, -y], [x, y], [-x, y], [-x, -y]].map(([a, b]) => new THREE.Vector3(a, b + cy, z));
   }
-  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0x3fa7ff, dashSize: 1.6, gapSize: 1.2 }));
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mats.tag);
   l.computeLineDistances();
   g.add(l);
   return g;
@@ -520,7 +535,8 @@ function updatePrintPreview() {
   const grid = new THREE.GridHelper(bed, bed / 16, 0x777777, 0x888888);
   grid.rotation.x = Math.PI / 2; grid.position.set(bed / 2, bed / 2, 0);
   groupPrint.add(grid);
-  for (const g of pl.groups) g.parts.forEach((m) => groupPrint.add(meshObj(m, m.name === 'Plate_Motif' ? mats.motif : mats.plate)));
+  const matFor = (n) => (n === 'Plate_Motif' ? mats.motif : /^(frame|latch)/i.test(n) ? mats.frame : mats.plate);
+  for (const g of pl.groups) g.parts.forEach((m) => groupPrint.add(meshObj(m, matFor(m.name))));
   if (!pl.fits) showWarnings([`The parts need ${pl.footprint.map((x) => x.toFixed(0)).join(' × ')} mm and don't fit a ${bed} mm bed. Export fewer parts at once.`]);
 }
 

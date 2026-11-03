@@ -70,6 +70,8 @@
       -34,
       38.5
     ],
+    "mid_x": 15.5,
+    "dt_web_min": 5,
     "hinge_inset": 2,
     "kn_r": 3.5,
     "kn_rc": 3.9

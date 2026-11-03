@@ -23,12 +23,21 @@ the Fusion STEP) and local paths out of it.
 - `src/frame.js`: switch cover size, indent and sticker pocket.
   - `buildFrame` STRETCHES the CAD frame meshes at x = +-25 and y = +-25. The bars are
     prismatic there (measured). Growing fills the gap with a 1 mm slab of the bar scaled
-    along the axis. Shrinking removes a slice: in x up to model.frame.shrink_max.x per
-    side (the dovetail grooves must stay centred for the fixed plate); in y ONE slice from
+    along the axis. Shrinking removes a slice: in x first up to model.frame.shrink_max.x per
+    side outside the dovetail grooves; below 55 wide (user request) a slice from the middle
+    of the top and bottom bars (|x| < mid_x) moves both grooves inward, and `buildBase`
+    moves the plate's tongues (the only plate geometry above its top edge) to match,
+    keeping dt_web_min between the grooves (min width about 28). In y ONE slice from
     the middle of model.frame.band_y, where both side bars are prismatic (min about
-    55 x 10.5). The old two-cut y shrink stopped at 64.2, which the user called out as far
+    28 x 10.2). The old two-cut y shrink stopped at 64.2, which the user called out as far
     too much.
   - The latch, plate and cover move with their corner (base/cover by -dH/2 in y).
+  - Below about 73 wide the bottom-left knuckle and the latch reach over the plate's
+    (square) top-left corner. `buildFrame` then returns `plateNotch` (2D, plate coords):
+    the frame B parts below the plate's top edge plus the latch swept from -5 to 45 deg
+    open, offset by hinge_clear. Base and cover subtract it. `magnetPositions` moves any
+    magnet down until it has a 1.2 mm wall to the notch (base pocket refilled and recut,
+    cover pockets follow). Before this fix the knuckle dug into the plate below ~73 wide.
   - Indent: the CAD lip is removed everywhere except inside the knuckle circles (kn_r
     around the hinge axes T and Q, hinge_inset in from the outer corners). The knuckles
     reach about 0.9 x 0.9 mm into those two opening corners; this is inherent to the
@@ -43,6 +52,11 @@ the Fusion STEP) and local paths out of it.
   - `buildBase` refills the CAD pocket + scoop (model.base.fill), then cuts the sticker
     pocket (rect or round, + clear, depth t + 0.3) and an R6 scoop at its right edge. The
     plate itself never changes size: the user wants it to stay phone-sized.
+- `src/contrast.js`: WCAG contrast. The preview's dashed tag outline picks its colour
+  against the plate colour (AAA 7:1 first, the motif colour as a second priority) and drops
+  to AA 4.5:1 only where AAA is impossible (mid greys). User request.
+- Preview colours: `view.frame` (#adadad, frame + latch), `view.plate` (base + cover),
+  `view.motif`.
 - `src/text2d.js`: opentype.js text. Size = cap height (same as FreeCAD ShapeString with
   ScaleToSize).
 - `src/export3mf.js`: STL parsing, the print-plate layout (port of

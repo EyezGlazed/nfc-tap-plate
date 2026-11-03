@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import Module from 'manifold-3d';
 import { parseBinarySTL } from '../src/export3mf.js';
-import { toManifold, buildFrame, buildBase, stretch } from '../src/frame.js';
+import { toManifold, buildFrame, buildBase, magnetPositions, stretch } from '../src/frame.js';
+import { buildCover } from '../src/build.js';
 
 const root = new URL('../', import.meta.url);
 const rd = (p) => readFileSync(new URL(p, root));
@@ -37,7 +38,7 @@ test('default switch cover reproduces the CAD frame', () => {
   one(r.frame_a, 'A'); one(r.frame_b, 'B');
 });
 
-for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56, 12]]) {
+for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56, 12], [40, 82.2], [28, 50]]) {
   test(`switch cover ${w} x ${h}: valid, hinge and latch clearances kept`, () => {
     const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w, h });
     one(r.frame_a, 'A'); one(r.frame_b, 'B');
@@ -59,7 +60,7 @@ for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56,
 }
 
 test('too small is refused with a clear message', () => {
-  assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w: 50 }), /can't go below/);
+  assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w: 27 }), /can't go below/);
 });
 
 test('no step: only the knuckle nibs stay in the opening (no leftover lip)', () => {
@@ -113,4 +114,51 @@ test('height limit: one slice from the side-bar band, clear error below it', () 
   const minH = F.open_h - (F.band_y[1] - F.band_y[0]) + 0.5;
   assert.ok(minH < 15, `min height ${minH}`);
   assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, h: minH - 1 }), /can't go below/);
+});
+
+test('narrow frames: dovetails move inward, tongues follow, plate notched for latch + knuckle', () => {
+  const st = { shape: 'rect', w: 44, h: 28, t: 1, clear: 0.3 };
+  const yTop = model.plate.cy + model.plate.h / 2;
+  const tongues = (b) => b.intersect(wasm.Manifold.cube([200, 20, 50]).translate([-100, yTop + 0.01, -10]));
+  const fit = (w, h) => {
+    const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w, h });
+    const mags = magnetPositions(wasm, model, r.plateNotch);
+    const raw = buildBase(wasm, parts.plate_base, model, st, r.dtShift, r.plateNotch, mags.pos).base;
+    const b = raw.translate([0, -r.dH / 2, 0]);
+    const { cover } = buildCover(wasm, model, null, -r.dH / 2, r.plateNotch, mags.pos);
+    // magnet pockets: same total volume as CAD (moved, not lost), base and cover aligned, walled off from the notch
+    const M = model.magnets, mr = (M.dia + M.fit) / 2, md = M.t + M.fit;
+    const holes = wasm.Manifold.union(mags.pos.map(([x, y]) => wasm.Manifold.cylinder(md - 0.2, mr - 0.05, mr - 0.05, 48).translate([x, model.plate.cy + y, model.plate.split_z - md + 0.1])));
+    near(raw.intersect(holes).volume(), 0, 0.01, `${w}: base pockets where the magnets are`);
+    near(buildCover(wasm, model, null, 0, r.plateNotch, mags.pos).cover.intersect(holes.translate([0, 0, md])).volume(), 0, 0.01, `${w}: cover pockets line up`);
+    if (r.plateNotch) {
+      const walls = wasm.CrossSection.compose(mags.pos.map(([x, y]) => wasm.CrossSection.circle(mr + 1.15, 48).translate([x, model.plate.cy + y])));
+      near(walls.intersect(r.plateNotch).area(), 0, 1e-6, `${w}: magnet wall to the notch`);
+    }
+    one(b, `plate ${w}`);
+    const [px, py] = r.pivot;
+    let latchHit = 0, coverHit = 0;
+    for (let a = -4; a <= 45; a += 7) {
+      const l = r.latch.translate([-px, -py, 0]).rotate([0, 0, a]).translate([px, py, 0]);
+      latchHit = Math.max(latchHit, l.intersect(b).volume()); coverHit = Math.max(coverHit, l.intersect(cover).volume());
+    }
+    return { r, b, tg: tongues(raw), hitB: b.intersect(r.frame_b).volume(), hitCover: cover.intersect(r.frame_b).volume(), latchHit, coverHit };
+  };
+  const d = fit(F.open_w, F.open_h);
+  assert.equal(d.r.plateNotch, null, 'default: no notch');
+  for (const [w, h] of [[72, F.open_h], [55, F.open_h], [40, 70], [28, F.open_h]]) {
+    const x = fit(w, h);
+    const k = `${w} x ${h}`;
+    near(x.r.dtShift, Math.max(0, (55 - w) / 2), 1e-9, `${k}: groove shift`);
+    near(x.hitB, 0, 0.01, `${k}: plate clear of frame B`);
+    near(x.hitCover, 0, 0.01, `${k}: cover clear of frame B`);
+    near(x.latchHit, 0, 0.01, `${k}: plate clear of the latch, closed to 45° open`);
+    near(x.coverHit, 0, 0.01, `${k}: cover clear of the latch`);
+    // tongues: same shape, moved inward by dtShift
+    near(x.tg.volume(), d.tg.volume(), 0.05, `${k}: tongue volume`);
+    const bb = x.tg.boundingBox(), bd = d.tg.boundingBox();
+    near(bb.max[0], bd.max[0] - x.r.dtShift, 0.01, `${k}: right tongue position`);
+    near(bb.min[0], bd.min[0] + x.r.dtShift, 0.01, `${k}: left tongue position`);
+    if (w < 72) assert.ok(x.r.plateNotch, `${k}: notched`);
+  }
 });

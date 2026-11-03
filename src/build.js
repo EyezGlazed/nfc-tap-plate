@@ -129,15 +129,17 @@ export function layoutFront(wasm, model, s, shapes, font) {
 }
 
 /** Cover body with chamfer, magnet pockets and the inlay cut; and the motif solid. */
-export function buildCover(wasm, model, motif2d, yShift = 0) {
+export function buildCover(wasm, model, motif2d, yShift = 0, notch = null, magPos = null) {
   const { Manifold, CrossSection: CS } = wasm;
   const P = model.plate, M = model.magnets;
   const outline = roundedRect(CS, P.w, P.h, P.corner_r);
   const lower = outline.extrude(P.cover_t - P.chamfer);
   const top = outline.offset(-P.chamfer, 'Round', 2, 64).extrude(1e-3).translate([0, 0, P.cover_t - 1e-3]);
   let body = Manifold.hull([lower, top]).translate([0, P.cy, P.split_z]);
+  // narrow frames: corner notch for the latch and hinge (plate coords, see buildFrame)
+  if (notch) body = body.subtract(notch.extrude(100).translate([0, 0, -50]));
   const r = (M.dia + M.fit) / 2, d = M.t + M.fit;
-  const pockets = Manifold.union(M.pos.map(([x, y]) =>
+  const pockets = Manifold.union((magPos || M.pos).map(([x, y]) =>
     Manifold.cylinder(d + 0.01, r, r, 64).translate([x, P.cy + y, P.split_z - 0.01])));
   let cover = body.subtract(pockets);
   let motif = null;

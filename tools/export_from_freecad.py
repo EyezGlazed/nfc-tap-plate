@@ -95,6 +95,9 @@ model = {
               'lip_w': g('lip'), 'lip_h': g('lip_depth'), 'hinge_clear': g('hinge_clear'),
               'dt_d': g('dt_d'), 'dt_x': g('dt_x'), 'dt_w1': g('dt_w1'),
               'cut': {'x': 25, 'y': 25}, 'shrink_max': {'x': 14}, 'band_y': [-34, 38.5],
+              # below 55 wide, a middle slice (|x| < mid_x, between the grooves) moves the
+              # dovetails inward, keeping dt_web_min between the grooves' inner edges
+              'mid_x': 15.5, 'dt_web_min': 5,
               # hinge axes sit hinge_inset inside the outer corners (T top right, Q bottom left);
               # knuckles have radius kn_r, the clearance groove in the other half kn_rc
               'hinge_inset': g('hinge_inset'), 'kn_r': g('kn_r'), 'kn_rc': g('kn_rc')},
