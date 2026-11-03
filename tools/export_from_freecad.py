@@ -89,11 +89,12 @@ model = {
     # Frame stretching (src/frame.js). The bars have a constant cross-section between the
     # cut planes and the stretch limits below. These were measured on the exported meshes:
     # top bar -40..39.5, bottom bar +-24.5..+-39.5 (outside the dovetail grooves),
-    # left bar -34.5..39.5 (above the latch window), right bar -39.5..39.
+    # left bar -34..39.5 (above the latch window), right bar -39..39. Height shrinks by one
+    # slice from the middle of band_y (both side bars prismatic there).
     'frame': {'open_w': g('open_w'), 'open_h': g('open_h'), 'wall': g('wall'), 'depth': g('depth'),
               'lip_w': g('lip'), 'lip_h': g('lip_depth'), 'hinge_clear': g('hinge_clear'),
               'dt_d': g('dt_d'), 'dt_x': g('dt_x'), 'dt_w1': g('dt_w1'),
-              'cut': {'x': 25, 'y': 25}, 'shrink_max': {'x': 14, 'y': 9},
+              'cut': {'x': 25, 'y': 25}, 'shrink_max': {'x': 14}, 'band_y': [-34, 38.5],
               # hinge axes sit hinge_inset inside the outer corners (T top right, Q bottom left);
               # knuckles have radius kn_r, the clearance groove in the other half kn_rc
               'hinge_inset': g('hinge_inset'), 'kn_r': g('kn_r'), 'kn_rc': g('kn_rc')},

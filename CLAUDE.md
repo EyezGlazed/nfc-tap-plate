@@ -23,8 +23,11 @@ the Fusion STEP) and local paths out of it.
 - `src/frame.js`: switch cover size, indent and sticker pocket.
   - `buildFrame` STRETCHES the CAD frame meshes at x = +-25 and y = +-25. The bars are
     prismatic there (measured). Growing fills the gap with a 1 mm slab of the bar scaled
-    along the axis; shrinking removes a slice, up to model.frame.shrink_max per side
-    (min about 55 x 64).
+    along the axis. Shrinking removes a slice: in x up to model.frame.shrink_max.x per
+    side (the dovetail grooves must stay centred for the fixed plate); in y ONE slice from
+    the middle of model.frame.band_y, where both side bars are prismatic (min about
+    55 x 10.5). The old two-cut y shrink stopped at 64.2, which the user called out as far
+    too much.
   - The latch, plate and cover move with their corner (base/cover by -dH/2 in y).
   - Indent: the CAD lip is removed everywhere except inside the knuckle circles (kn_r
     around the hinge axes T and Q, hinge_inset in from the outer corners). The knuckles

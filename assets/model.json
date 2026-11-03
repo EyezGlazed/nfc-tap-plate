@@ -64,9 +64,12 @@
       "y": 25
     },
     "shrink_max": {
-      "x": 14,
-      "y": 9
+      "x": 14
     },
+    "band_y": [
+      -34,
+      38.5
+    ],
     "hinge_inset": 2,
     "kn_r": 3.5,
     "kn_rc": 3.9
@@ -110,8 +113,8 @@
     "logo": {
       "svg": "assets/logos/n-mark.svg",
       "height": 24,
-      "x": 0.0,
-      "y": -0.0
+      "x": 0,
+      "y": 0
     },
     "frame": {
       "on": true,

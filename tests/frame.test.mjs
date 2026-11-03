@@ -37,7 +37,7 @@ test('default switch cover reproduces the CAD frame', () => {
   one(r.frame_a, 'A'); one(r.frame_b, 'B');
 });
 
-for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70]]) {
+for (const [w, h] of [[110, 120], [83 - 27, 82.2 - 17], [95, 70], [83, 60], [56, 12]]) {
   test(`switch cover ${w} x ${h}: valid, hinge and latch clearances kept`, () => {
     const r = buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, w, h });
     one(r.frame_a, 'A'); one(r.frame_b, 'B');
@@ -107,4 +107,10 @@ test('sticker pocket: default matches CAD, round and other sizes cut cleanly', (
   one(card.base, 'credit card');
   const big = buildBase(wasm, parts.plate_base, model, { shape: 'rect', w: 60, h: 95, t: 1, clear: 0.3 });
   assert.ok(big.warnings.length > 0, 'warns when too big');
+});
+
+test('height limit: one slice from the side-bar band, clear error below it', () => {
+  const minH = F.open_h - (F.band_y[1] - F.band_y[0]) + 0.5;
+  assert.ok(minH < 15, `min height ${minH}`);
+  assert.throws(() => buildFrame(wasm, parts, F, model.latch.pivot, { ...DEF, h: minH - 1 }), /can't go below/);
 });

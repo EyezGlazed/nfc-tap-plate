@@ -4,8 +4,11 @@
 // latch and dovetail grooves) are STRETCHED. Each bar is cut by a plane where its
 // cross-section is constant; the far piece moves, and the gap is filled by stretching a
 // 1 mm slab of the bar itself (exact, because the bar is prismatic there). Shrinking
-// removes a slice instead. Width cuts sit outside the dovetail grooves, height cuts above
-// the latch window. See model.frame.cut / shrink_max.
+// removes a slice instead. Width cuts sit outside the dovetail grooves (the plate's
+// dovetails stay centred), so each side can lose shrink_max.x. Height shrinks by ONE slice
+// taken from the middle of band_y, where both side bars are prismatic (above the latch
+// window, below the top corners), so almost all of the side bars can go.
+// See model.frame.cut / shrink_max / band_y.
 //
 // Coordinates: the model's assembled coordinates (mm, z = 0 wall, frame centred on 0,0).
 
@@ -72,13 +75,18 @@ export function buildFrame(wasm, parts, F, latchPivot, sw) {
   const warnings = [], notes = []; // warnings: something to fix; notes: good to know
   const dW = sw.w - F.open_w, dH = sw.h - F.open_h;
   if (dW < -2 * F.shrink_max.x) throw new Error(`Switch cover width: the frame can't go below ${(F.open_w - 2 * F.shrink_max.x).toFixed(1)} mm (hinge and latch need the room).`);
-  if (dH < -2 * F.shrink_max.y) throw new Error(`Switch cover height: the frame can't go below ${(F.open_h - 2 * F.shrink_max.y).toFixed(1)} mm (hinge and latch need the room).`);
+  const [b0, b1] = F.band_y, minH = Math.ceil((F.open_h - (b1 - b0) + 0.5) * 10) / 10;
+  if (sw.h < minH) throw new Error(`Switch cover height: the frame can't go below ${minH.toFixed(1)} mm (hinge and latch need the room).`);
   const cx = F.cut.x, cy = F.cut.y;
   const grow = (m) => {
     m = stretch(wasm, m, 0, cx, dW / 2, 1);
     m = stretch(wasm, m, 0, -cx, dW / 2, -1);
-    m = stretch(wasm, m, 1, cy, dH / 2, 1);
-    return stretch(wasm, m, 1, -cy, dH / 2, -1);
+    if (dH >= 0) {
+      m = stretch(wasm, m, 1, cy, dH / 2, 1);
+      return stretch(wasm, m, 1, -cy, dH / 2, -1);
+    }
+    // remove one slice of height -dH centred in the band, then re-centre the opening
+    return stretch(wasm, m, 1, (b0 + b1) / 2 + dH / 2, dH, 1).translate([0, -dH / 2, 0]);
   };
   let A = grow(parts.frame_a), B = grow(parts.frame_b);
   const latch = parts.latch.translate([-dW / 2, -dH / 2, 0]);
