@@ -29,6 +29,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* .row etc. set display, which would beat the hidden attribute */
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg); color: var(--ink);
