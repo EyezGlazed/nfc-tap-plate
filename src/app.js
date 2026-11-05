@@ -26,14 +26,15 @@ const setStatus = (t, err = false) => { statusEl.textContent = t; statusEl.class
 // ---------------- state
 const clone = (o) => JSON.parse(JSON.stringify(o));
 let current = null; // last build: { cover, motifs, lay }
-let state = {
+const initialState = () => ({
   settings: clone(DEFAULT_SETTINGS),
   logoSvg: null, logoName: null, // null = default N-mark
   iconSvg: null, iconName: null, // null = default signal arcs
   fontId: 'open-sans-700', customFont: null, customFontName: null, // customFont: base64
   view: { showTag: true, showFrame: true },
   out: { extras: true, bed: 256, frame: true, base: true, cover: true },
-};
+});
+let state = initialState();
 try {
   const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
   if (saved && saved.settings) state = merge(state, saved);
@@ -607,6 +608,18 @@ $('#btn-save').addEventListener('click', () => {
   download(JSON.stringify({ app: 'nfc-tap-plate', version: 1, ...state }, null, 1), 'nfc-tap-plate-design.json', 'application/json');
 });
 $('#btn-load').addEventListener('click', () => $('#file-design').click());
+// back to the defaults: drops the stored state, uploaded logo / icon / font and link settings
+$('#btn-reset').addEventListener('click', async () => {
+  if (!confirm('Reset every setting to the defaults? Save your design first if you want to keep it.')) return;
+  state = initialState();
+  try { localStorage.removeItem(STORE); } catch { /* blocked */ }
+  history.replaceState(null, '', location.pathname + location.search);
+  shapes.logo = shapes.icon = null; font = null;
+  persist(); buildPanel(); paintColors();
+  await rebuild();
+  frameCamera();
+  setStatus('Reset to the defaults');
+});
 $('#file-design').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;

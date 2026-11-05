@@ -12,6 +12,8 @@ the Fusion STEP) and local paths out of it.
 - `index.html`: import map (pinned CDN versions) + shell.
 - `src/app.js`: UI generated from `SCHEMA`, three.js preview (Front / 3D / Print plate),
   state in localStorage (`nfc-tap-plate:v1`), save/open design JSON, 3MF download.
+  Reset (header) asks first, then restores `initialState()` and drops the stored state, uploaded
+  logo / icon / font and any URL-hash settings.
   `#view=3d` or `#view=print` in the URL opens that view. Any `settings.*`, `view.*` or
   `out.*` key can be set the same way (arrays separated by `|`). This is handy for
   headless screenshots: Chrome `--headless=new --use-angle=swiftshader
